@@ -20,7 +20,9 @@ const translateConcurrency = Math.max(1, Number(process.env.TRANSLATE_CONCURRENC
 const requestTimeoutMs = Math.max(1000, Number(process.env.SUNBIRD_REQUEST_TIMEOUT_MS || 20000));
 const retryCount = Math.max(0, Number(process.env.SUNBIRD_RETRY_COUNT || 1));
 const translationCacheMaxEntries = Math.max(100, Number(process.env.TRANSLATION_CACHE_MAX_ENTRIES || 5000));
+const maxRequestsPerMinute = Math.max(1, Number(process.env.SUNBIRD_MAX_REQUESTS_PER_MINUTE || 45));
 const translationCache = new Map();
+const upstreamRequestTimestamps = [];
 
 function makeCacheKey(source_language, target_language, text) {
   return `${source_language}\u0001${target_language}\u0001${text}`;
@@ -83,6 +85,37 @@ function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function parseRetryAfterMs(headerValue) {
+  if (!headerValue) return 0;
+  const raw = String(headerValue).trim();
+  const seconds = Number(raw);
+  if (Number.isFinite(seconds) && seconds > 0) return Math.ceil(seconds * 1000);
+  const at = Date.parse(raw);
+  if (!Number.isNaN(at)) return Math.max(0, at - Date.now());
+  return 0;
+}
+
+function nextRateSlotDelayMs() {
+  const now = Date.now();
+  const windowMs = 60_000;
+  while (upstreamRequestTimestamps.length && now - upstreamRequestTimestamps[0] >= windowMs) {
+    upstreamRequestTimestamps.shift();
+  }
+  if (upstreamRequestTimestamps.length < maxRequestsPerMinute) return 0;
+  return Math.max(0, windowMs - (now - upstreamRequestTimestamps[0])) + 25;
+}
+
+async function acquireRateSlot() {
+  while (true) {
+    const delayMs = nextRateSlotDelayMs();
+    if (delayMs <= 0) {
+      upstreamRequestTimestamps.push(Date.now());
+      return;
+    }
+    await wait(delayMs);
+  }
+}
+
 function isRetriableStatus(status) {
   return status === 429 || status >= 500;
 }
@@ -115,6 +148,8 @@ async function callSingleEndpoint({ source_language, target_language, text, endp
 
   for (let attempt = 0; attempt <= retryCount; attempt++) {
     try {
+      await acquireRateSlot();
+
       const res = await fetchWithTimeout(
         url,
         {
@@ -140,7 +175,10 @@ async function callSingleEndpoint({ source_language, target_language, text, endp
         });
 
         if (isRetriableStatus(res.status) && attempt < retryCount) {
-          await wait(250 * (attempt + 1));
+          const retryAfterMs = parseRetryAfterMs(res.headers.get('retry-after'));
+          const quotaDelayMs = res.status === 429 ? nextRateSlotDelayMs() : 0;
+          const backoffMs = 250 * (attempt + 1);
+          await wait(Math.max(backoffMs, retryAfterMs, quotaDelayMs, 1000));
           continue;
         }
 
@@ -163,7 +201,8 @@ async function callSingleEndpoint({ source_language, target_language, text, endp
       const retriable = details.type === 'network' || details.type === 'timeout' || isRetriableStatus(details.status || 0);
 
       if (retriable && attempt < retryCount) {
-        await wait(250 * (attempt + 1));
+        const quotaDelayMs = details.status === 429 ? nextRateSlotDelayMs() : 0;
+        await wait(Math.max(250 * (attempt + 1), quotaDelayMs, 1000));
         continue;
       }
 
@@ -220,6 +259,8 @@ app.get('/health', (_req, res) => {
     retryCount,
     translationCacheEntries: translationCache.size,
     translationCacheMaxEntries,
+    maxRequestsPerMinute,
+    queuedForRateLimit: Math.max(0, upstreamRequestTimestamps.length - maxRequestsPerMinute),
   });
 });
 
