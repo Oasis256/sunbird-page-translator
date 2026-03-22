@@ -3,7 +3,7 @@ const translateBtn = document.getElementById('translateBtn');
 const restoreBtn = document.getElementById('restoreBtn');
 const copyBtn = document.getElementById('copyBtn');
 
-const PROXY_URL = 'http://localhost:8787/translate';
+const PROXY_URL = 'https://wiki.soothingspotspa.care/translate';
 const SOURCE_LANG = 'eng';
 const TARGET_LANG = 'nyn';
 const CHUNK_CHAR_LIMIT = 2000;
@@ -238,10 +238,10 @@ async function checkProxyHealth() {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 6000);
   try {
-    const res = await fetch('http://localhost:8787/health', { signal: controller.signal });
+    const res = await fetch('https://wiki.soothingspotspa.care/health', { signal: controller.signal });
     if (!res.ok) throw new Error(`Proxy health ${res.status}`);
   } catch (_err) {
-    throw new Error('Proxy unavailable. Ensure proxy is running on http://localhost:8787.');
+    throw new Error('Proxy unavailable. Ensure proxy is running on https://wiki.soothingspotspa.care.');
   } finally {
     clearTimeout(timeout);
   }
@@ -748,3 +748,4 @@ copyBtn.addEventListener('click', async () => {
 });
 
 setStatus('Ready (native-like mode v16: dedupe cache + faster parallel)');
+
