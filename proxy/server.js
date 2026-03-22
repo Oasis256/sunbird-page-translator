@@ -10,7 +10,7 @@ app.use(express.json({ limit: '1mb' }));
 
 const baseUrl = process.env.SUNBIRD_BASE_URL || 'https://api.sunbird.ai';
 const token = process.env.SUNBIRD_TOKEN || '';
-const endpoints = (process.env.SUNBIRD_TRANSLATE_ENDPOINTS || '/tasks/nllb_translate,/tasks/translate,/tasks/translation')
+const endpoints = (process.env.SUNBIRD_TRANSLATE_ENDPOINTS || '/tasks/translate,/tasks/nllb_translate')
   .split(',')
   .map((x) => x.trim())
   .filter(Boolean);
@@ -287,4 +287,5 @@ app.post('/translate', async (req, res) => {
 app.listen(port, () => {
   console.log(`Sunbird proxy listening on http://localhost:${port}`);
 });
+
 

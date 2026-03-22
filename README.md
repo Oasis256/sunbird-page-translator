@@ -30,7 +30,7 @@ This compose file builds from GitHub directly (`main:proxy`) and tags image as `
 ```env
 SUNBIRD_BASE_URL=https://api.sunbird.ai
 SUNBIRD_TOKEN=your-token
-SUNBIRD_TRANSLATE_ENDPOINTS=/tasks/nllb_translate,/tasks/translate,/tasks/translation
+SUNBIRD_TRANSLATE_ENDPOINTS=/tasks/translate,/tasks/nllb_translate
 PORT=8787
 TRANSLATE_CONCURRENCY=6
 SUNBIRD_REQUEST_TIMEOUT_MS=20000
@@ -69,3 +69,4 @@ docker compose down
 3. Click **Translate Page**.
 4. Click **Restore** to revert page changes.
 5. Click **Copy Wikitext** to copy translated source.
+
