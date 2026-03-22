@@ -9,8 +9,8 @@ const TARGET_LANG = 'nyn';
 const CHUNK_CHAR_LIMIT = 2000;
 const REQUEST_TIMEOUT_MS = 120000;
 const MAX_SPLIT_DEPTH = 5;
-const PAGE_CHUNK_CONCURRENCY = 2;
-const COPY_CHUNK_CONCURRENCY = 2;
+const PAGE_CHUNK_CONCURRENCY = 3;
+const COPY_CHUNK_CONCURRENCY = 3;
 
 let isRunning = false;
 
@@ -747,4 +747,4 @@ copyBtn.addEventListener('click', async () => {
   }
 });
 
-setStatus('Ready (native-like mode v15: faster local parallel chunks)');
+setStatus('Ready (native-like mode v16: dedupe cache + faster parallel)');

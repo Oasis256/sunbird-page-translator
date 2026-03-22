@@ -1,6 +1,8 @@
 services:
   sunbird-proxy:
     image: oasis256/sunbird-proxy:latest
+    container_name: Sunbird
+    hostname: sunbird
     build:
       context: https://github.com/Oasis256/sunbird-page-translator.git#main:proxy
     ports:

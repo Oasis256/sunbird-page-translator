@@ -16,9 +16,32 @@ const endpoints = (process.env.SUNBIRD_TRANSLATE_ENDPOINTS || '/tasks/nllb_trans
   .filter(Boolean);
 const port = Number(process.env.PORT || 8787);
 
-const translateConcurrency = Math.max(1, Number(process.env.TRANSLATE_CONCURRENCY || 6));
+const translateConcurrency = Math.max(1, Number(process.env.TRANSLATE_CONCURRENCY || 8));
 const requestTimeoutMs = Math.max(1000, Number(process.env.SUNBIRD_REQUEST_TIMEOUT_MS || 20000));
 const retryCount = Math.max(0, Number(process.env.SUNBIRD_RETRY_COUNT || 1));
+const translationCacheMaxEntries = Math.max(100, Number(process.env.TRANSLATION_CACHE_MAX_ENTRIES || 5000));
+const translationCache = new Map();
+
+function makeCacheKey(source_language, target_language, text) {
+  return `${source_language}\u0001${target_language}\u0001${text}`;
+}
+
+function cacheGet(key) {
+  if (!translationCache.has(key)) return null;
+  const value = translationCache.get(key);
+  translationCache.delete(key);
+  translationCache.set(key, value);
+  return value;
+}
+
+function cacheSet(key, value) {
+  if (translationCache.has(key)) translationCache.delete(key);
+  translationCache.set(key, value);
+  if (translationCache.size > translationCacheMaxEntries) {
+    const oldestKey = translationCache.keys().next().value;
+    if (oldestKey !== undefined) translationCache.delete(oldestKey);
+  }
+}
 
 function requireToken() {
   if (!token || token.startsWith('replace-with-your-token')) {
@@ -195,6 +218,8 @@ app.get('/health', (_req, res) => {
     translateConcurrency,
     requestTimeoutMs,
     retryCount,
+    translationCacheEntries: translationCache.size,
+    translationCacheMaxEntries,
   });
 });
 
@@ -212,9 +237,43 @@ app.post('/translate', async (req, res) => {
       return res.status(400).json({ error: 'Every item in `texts` must be a string.' });
     }
 
-    const translations = await mapWithConcurrency(texts, translateConcurrency, async (text) =>
-      callSunbirdTranslate({ source_language, target_language, text })
-    );
+    const uniqueTexts = [];
+    const uniqueIndexByText = new Map();
+
+    for (const text of texts) {
+      if (!uniqueIndexByText.has(text)) {
+        uniqueIndexByText.set(text, uniqueTexts.length);
+        uniqueTexts.push(text);
+      }
+    }
+
+    const uniqueTranslations = new Array(uniqueTexts.length);
+    const missing = [];
+
+    for (let i = 0; i < uniqueTexts.length; i++) {
+      const text = uniqueTexts[i];
+      const key = makeCacheKey(source_language, target_language, text);
+      const cached = cacheGet(key);
+      if (typeof cached === 'string' && cached.length) {
+        uniqueTranslations[i] = cached;
+      } else {
+        missing.push({ index: i, text, key });
+      }
+    }
+
+    if (missing.length) {
+      const translatedMissing = await mapWithConcurrency(missing, translateConcurrency, async (item) => {
+        const translated = await callSunbirdTranslate({ source_language, target_language, text: item.text });
+        cacheSet(item.key, translated);
+        return { index: item.index, translated };
+      });
+
+      for (const item of translatedMissing) {
+        uniqueTranslations[item.index] = item.translated;
+      }
+    }
+
+    const translations = texts.map((text) => uniqueTranslations[uniqueIndexByText.get(text)] || text);
 
     res.json({ source_language, target_language, translations });
   } catch (err) {
