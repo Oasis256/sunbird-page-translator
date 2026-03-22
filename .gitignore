@@ -1,0 +1,22 @@
+# Node
+node_modules/
+npm-debug.log*
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Extension signing/build artifacts
+*.pem
+*.crx
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Optional logs
+logs/
+*.log

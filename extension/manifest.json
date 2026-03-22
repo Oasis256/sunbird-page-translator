@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Sunbird Wikipedia Translator",
+  "version": "0.2.0",
+  "description": "Translate visible Wikipedia article text to Runyankore using Sunbird API via local proxy.",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://*.wikipedia.org/*",
+    "http://localhost:8787/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Sunbird Translator"
+  }
+}

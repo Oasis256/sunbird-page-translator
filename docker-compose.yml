@@ -1,0 +1,10 @@
+services:
+  sunbird-proxy:
+    build:
+      context: ./proxy
+    container_name: sunbird-page-translator-proxy
+    ports:
+      - "8787:8787"
+    env_file:
+      - ./proxy/.env
+    restart: unless-stopped
