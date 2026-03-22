@@ -21,8 +21,34 @@ const requestTimeoutMs = Math.max(1000, Number(process.env.SUNBIRD_REQUEST_TIMEO
 const retryCount = Math.max(0, Number(process.env.SUNBIRD_RETRY_COUNT || 1));
 const translationCacheMaxEntries = Math.max(100, Number(process.env.TRANSLATION_CACHE_MAX_ENTRIES || 5000));
 const maxRequestsPerMinute = Math.max(1, Number(process.env.SUNBIRD_MAX_REQUESTS_PER_MINUTE || 45));
+const logLevel = (process.env.LOG_LEVEL || 'info').toLowerCase();
+const debugTranslation = ['1', 'true', 'yes', 'on'].includes(String(process.env.DEBUG_TRANSLATION || '').toLowerCase());
 const translationCache = new Map();
 const upstreamRequestTimestamps = [];
+let requestSeq = 0;
+
+function logAtLevel(level, message, data = null) {
+  const rank = { error: 0, warn: 1, info: 2, debug: 3 };
+  const current = rank[logLevel] ?? 2;
+  const target = rank[level] ?? 2;
+  if (target > current) return;
+
+  const payload = data ? ` ${JSON.stringify(data)}` : '';
+  const line = `[proxy:${level}] ${message}${payload}`;
+
+  if (level === 'error') console.error(line);
+  else if (level === 'warn') console.warn(line);
+  else console.log(line);
+}
+
+function logInfo(message, data = null) {
+  logAtLevel('info', message, data);
+}
+
+function logDebug(message, data = null) {
+  if (!debugTranslation) return;
+  logAtLevel('debug', message, data);
+}
 
 function makeCacheKey(source_language, target_language, text) {
   return `${source_language}\u0001${target_language}\u0001${text}`;
@@ -112,6 +138,9 @@ async function acquireRateSlot() {
       upstreamRequestTimestamps.push(Date.now());
       return;
     }
+    if (delayMs >= 1000) {
+      logDebug('rate-limit-wait', { delayMs });
+    }
     await wait(delayMs);
   }
 }
@@ -149,6 +178,7 @@ async function callSingleEndpoint({ source_language, target_language, text, endp
   for (let attempt = 0; attempt <= retryCount; attempt++) {
     try {
       await acquireRateSlot();
+      logDebug('sunbird-request', { endpoint, attempt: attempt + 1 });
 
       const res = await fetchWithTimeout(
         url,
@@ -173,6 +203,8 @@ async function callSingleEndpoint({ source_language, target_language, text, endp
           attempt,
           responseBody: body,
         });
+
+        logAtLevel(res.status === 429 ? 'warn' : 'error', 'sunbird-non-200', { endpoint, status: res.status, attempt: attempt + 1 });
 
         if (isRetriableStatus(res.status) && attempt < retryCount) {
           const retryAfterMs = parseRetryAfterMs(res.headers.get('retry-after'));
@@ -268,6 +300,9 @@ app.post('/translate', async (req, res) => {
   try {
     requireToken();
 
+    const reqId = ++requestSeq;
+    const startedAt = Date.now();
+
     const { source_language = 'eng', target_language = 'nyn', texts } = req.body || {};
 
     if (!Array.isArray(texts) || !texts.length) {
@@ -277,6 +312,8 @@ app.post('/translate', async (req, res) => {
     if (texts.some((t) => typeof t !== 'string')) {
       return res.status(400).json({ error: 'Every item in `texts` must be a string.' });
     }
+
+    logInfo('translate-start', { reqId, count: texts.length, source_language, target_language });
 
     const uniqueTexts = [];
     const uniqueIndexByText = new Map();
@@ -291,6 +328,8 @@ app.post('/translate', async (req, res) => {
     const uniqueTranslations = new Array(uniqueTexts.length);
     const missing = [];
 
+    logInfo('translate-dedupe', { reqId, unique: uniqueTexts.length, duplicate: texts.length - uniqueTexts.length });
+
     for (let i = 0; i < uniqueTexts.length; i++) {
       const text = uniqueTexts[i];
       const key = makeCacheKey(source_language, target_language, text);
@@ -301,6 +340,8 @@ app.post('/translate', async (req, res) => {
         missing.push({ index: i, text, key });
       }
     }
+
+    logInfo('translate-cache', { reqId, hit: uniqueTexts.length - missing.length, miss: missing.length });
 
     if (missing.length) {
       const translatedMissing = await mapWithConcurrency(missing, translateConcurrency, async (item) => {
@@ -316,8 +357,11 @@ app.post('/translate', async (req, res) => {
 
     const translations = texts.map((text) => uniqueTranslations[uniqueIndexByText.get(text)] || text);
 
+    logInfo('translate-done', { reqId, count: texts.length, durationMs: Date.now() - startedAt });
+
     res.json({ source_language, target_language, translations });
   } catch (err) {
+    logAtLevel('error', 'translate-failed', { message: err?.message || 'Unexpected error', details: err?.details || null });
     res.status(err.status || 500).json({
       error: err.message || 'Unexpected error',
       details: err.details || null,
@@ -326,7 +370,7 @@ app.post('/translate', async (req, res) => {
 });
 
 app.listen(port, () => {
-  console.log(`Sunbird proxy listening on http://localhost:${port}`);
+  logInfo(`Sunbird proxy listening on http://localhost:${port}`, { endpoints, translateConcurrency, maxRequestsPerMinute, logLevel, debugTranslation });
 });
 
 
