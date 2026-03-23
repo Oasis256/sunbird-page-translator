@@ -11,6 +11,7 @@ const REQUEST_TIMEOUT_MS = 120000;
 const MAX_SPLIT_DEPTH = 5;
 const PAGE_CHUNK_CONCURRENCY = 3;
 const COPY_CHUNK_CONCURRENCY = 3;
+const EXTENSION_VERSION = chrome.runtime?.getManifest?.().version || '0.0.0';
 
 let isRunning = false;
 
@@ -747,5 +748,9 @@ copyBtn.addEventListener('click', async () => {
   }
 });
 
-setStatus('Ready (native-like mode v16: dedupe cache + faster parallel)');
+setStatus(`Ready (v${EXTENSION_VERSION} dedupe cache + faster parallel)`);
+
+
+
+
 

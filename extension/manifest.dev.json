@@ -10,7 +10,8 @@
   ],
   "host_permissions": [
     "https://*.wikipedia.org/*",
-    "https://wiki.soothingspotspa.care/*"
+    "https://wiki.soothingspotspa.care/*",
+    "http://localhost:8787/*"
   ],
   "action": {
     "default_popup": "popup.html",

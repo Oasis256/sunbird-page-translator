@@ -20,3 +20,6 @@ Thumbs.db
 # Optional logs
 logs/
 *.log
+
+# Build artifacts
+release/
