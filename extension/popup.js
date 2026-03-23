@@ -2,6 +2,12 @@ const statusEl = document.getElementById('status');
 const translateBtn = document.getElementById('translateBtn');
 const restoreBtn = document.getElementById('restoreBtn');
 const copyBtn = document.getElementById('copyBtn');
+const statePillEl = document.getElementById('statePill');
+const progressBarEl = document.getElementById('progressBar');
+const progressValueEl = document.getElementById('progressValue');
+const elapsedValueEl = document.getElementById('elapsedValue');
+const proxyValueEl = document.getElementById('proxyValue');
+const versionBadgeEl = document.getElementById('versionBadge');
 
 const PROXY_URL = 'https://wiki.soothingspotspa.care/translate';
 const SOURCE_LANG = 'eng';
@@ -11,12 +17,79 @@ const REQUEST_TIMEOUT_MS = 120000;
 const MAX_SPLIT_DEPTH = 5;
 const PAGE_CHUNK_CONCURRENCY = 3;
 const COPY_CHUNK_CONCURRENCY = 3;
+const BUILD_ITERATION = 16;
 const EXTENSION_VERSION = chrome.runtime?.getManifest?.().version || '0.0.0';
 
 let isRunning = false;
+let runStartedAt = 0;
+let runTimer = null;
+let progressPercent = 0;
+
+function formatElapsed(ms) {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const m = String(Math.floor(total / 60)).padStart(2, '0');
+  const s = String(total % 60).padStart(2, '0');
+  return `${m}:${s}`;
+}
+
+function setProgress(percent) {
+  progressPercent = Math.max(0, Math.min(100, Number(percent || 0)));
+  if (progressBarEl) progressBarEl.style.width = `${progressPercent}%`;
+  if (progressValueEl) progressValueEl.textContent = `${Math.round(progressPercent)}%`;
+}
+
+function setStatePill(state) {
+  if (!statePillEl) return;
+  statePillEl.classList.remove('running', 'success', 'error');
+  if (state === 'running') {
+    statePillEl.classList.add('running');
+    statePillEl.textContent = 'Running';
+    return;
+  }
+  if (state === 'success') {
+    statePillEl.classList.add('success');
+    statePillEl.textContent = 'Completed';
+    return;
+  }
+  if (state === 'error') {
+    statePillEl.classList.add('error');
+    statePillEl.textContent = 'Failed';
+    return;
+  }
+  statePillEl.textContent = 'Idle';
+}
+
+function statusTone(msg) {
+  const text = String(msg || '').toLowerCase();
+  if (text.includes('fail') || text.includes('error') || text.includes('timed out') || text.includes('unavailable')) return 'error';
+  if (text.includes('done') || text.includes('copied') || text.includes('restored')) return 'success';
+  if (text.includes('translating') || text.includes('starting') || text.includes('fetching') || text.includes('restoring')) return 'running';
+  return 'idle';
+}
+
+function syncProgressFromMessage(msg) {
+  const m = String(msg || '').match(/(\d+)\/(\d+)/);
+  if (!m) {
+    if (statusTone(msg) === 'success') setProgress(100);
+    return;
+  }
+  const done = Number(m[1]);
+  const total = Number(m[2]);
+  if (Number.isFinite(done) && Number.isFinite(total) && total > 0) {
+    setProgress((done / total) * 100);
+  }
+}
 
 function setStatus(msg) {
   statusEl.textContent = msg;
+  syncProgressFromMessage(msg);
+
+  const tone = statusTone(msg);
+  if (!isRunning && tone === 'running') {
+    setStatePill('idle');
+  } else {
+    setStatePill(tone);
+  }
 }
 
 function setRunningState(running) {
@@ -24,7 +97,27 @@ function setRunningState(running) {
   translateBtn.disabled = running;
   restoreBtn.disabled = false;
   copyBtn.disabled = running;
+
+  if (running) {
+    runStartedAt = Date.now();
+    setStatePill('running');
+    if (runTimer) clearInterval(runTimer);
+    runTimer = setInterval(() => {
+      if (elapsedValueEl) elapsedValueEl.textContent = formatElapsed(Date.now() - runStartedAt);
+    }, 500);
+  } else {
+    if (runTimer) {
+      clearInterval(runTimer);
+      runTimer = null;
+    }
+    if (elapsedValueEl) elapsedValueEl.textContent = formatElapsed(Date.now() - runStartedAt);
+  }
 }
+
+if (versionBadgeEl) versionBadgeEl.textContent = `v${EXTENSION_VERSION}`;
+if (proxyValueEl) proxyValueEl.textContent = PROXY_URL.includes('localhost') ? 'Local' : 'Cloud';
+setProgress(0);
+if (elapsedValueEl) elapsedValueEl.textContent = '00:00';
 
 function isWikipediaUrl(url) {
   return /^https:\/\/[a-z-]+\.wikipedia\.org\//i.test(url || '');
@@ -748,7 +841,7 @@ copyBtn.addEventListener('click', async () => {
   }
 });
 
-setStatus(`Ready (v${EXTENSION_VERSION} dedupe cache + faster parallel)`);
+setStatus(`Ready (v${EXTENSION_VERSION} | iteration ${BUILD_ITERATION})`);
 
 
 

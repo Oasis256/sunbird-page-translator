@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Sunbird Wikipedia Translator",
-  "version": "0.16.0",
+  "version": "0.16.1",
   "description": "Translate visible Wikipedia article text to Runyankore using Sunbird API via proxy.",
   "permissions": [
     "storage",

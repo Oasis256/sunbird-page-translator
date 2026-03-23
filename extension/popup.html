@@ -4,53 +4,211 @@
   <meta charset="utf-8" />
   <title>Sunbird Translator</title>
   <style>
+    :root {
+      --bg-a: #061429;
+      --bg-b: #0f4aa6;
+      --panel: rgba(255, 255, 255, 0.92);
+      --ink: #0f1f39;
+      --muted: #4a607f;
+      --ok: #0f9d58;
+      --warn: #f29900;
+      --err: #d93025;
+      --accent: #1e66ff;
+      --ring: #bcd2ff;
+    }
+
+    * { box-sizing: border-box; }
+
     body {
-      font-family: Arial, sans-serif;
-      margin: 12px;
-      width: 300px;
+      margin: 0;
+      width: 360px;
+      font-family: 'Manrope', 'Segoe UI', sans-serif;
+      color: var(--ink);
+      background: radial-gradient(circle at 10% -10%, #1b7dff 0%, transparent 42%),
+                  linear-gradient(145deg, var(--bg-a), var(--bg-b));
+      padding: 12px;
     }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid rgba(255, 255, 255, 0.6);
+      border-radius: 14px;
+      padding: 12px;
+      box-shadow: 0 10px 30px rgba(5, 18, 42, 0.28);
+    }
+
+    .head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      gap: 8px;
+    }
+
     h1 {
+      margin: 0;
       font-size: 16px;
-      margin: 0 0 8px;
+      line-height: 1.2;
+      font-weight: 800;
+      letter-spacing: 0.2px;
     }
+
+    .badge {
+      font-size: 11px;
+      font-weight: 700;
+      color: #173b7a;
+      background: #dbe8ff;
+      border: 1px solid #c3d7ff;
+      border-radius: 999px;
+      padding: 3px 8px;
+      white-space: nowrap;
+    }
+
+    .state {
+      font-size: 11px;
+      font-weight: 700;
+      border-radius: 999px;
+      padding: 4px 10px;
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid #cfe0ff;
+      background: #eef4ff;
+      color: #1f4f9f;
+      margin-bottom: 10px;
+    }
+
+    .state.running { background: #fff6e6; border-color: #ffd89a; color: #9d5d00; }
+    .state.success { background: #e9f8ef; border-color: #b7e7ca; color: #0d7f45; }
+    .state.error { background: #fdeceb; border-color: #f6c3bf; color: #b3261e; }
+
     .row {
       display: flex;
       gap: 8px;
-      margin-bottom: 8px;
       flex-wrap: wrap;
+      margin-bottom: 10px;
     }
+
     button {
       border: 0;
-      padding: 8px 10px;
-      border-radius: 6px;
+      border-radius: 9px;
+      padding: 9px 11px;
       cursor: pointer;
-      background: #0f62fe;
       color: #fff;
-    }
-    button.secondary {
-      background: #6b7280;
-    }
-    #status {
+      font-weight: 700;
       font-size: 12px;
-      color: #222;
-      min-height: 16px;
+      background: linear-gradient(180deg, #3a82ff, #1e66ff);
+      box-shadow: inset 0 -1px 0 rgba(0,0,0,0.15);
     }
+
+    button.secondary {
+      background: linear-gradient(180deg, #6e7f9d, #5c6e8f);
+    }
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+
+    .metric {
+      background: #f5f8ff;
+      border: 1px solid #dce7ff;
+      border-radius: 8px;
+      padding: 6px;
+      text-align: center;
+    }
+
+    .metric .k {
+      display: block;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.35px;
+      margin-bottom: 2px;
+    }
+
+    .metric .v {
+      display: block;
+      font-size: 12px;
+      font-weight: 800;
+      color: #193a75;
+    }
+
+    .progress-wrap {
+      background: #edf3ff;
+      border: 1px solid #d9e5ff;
+      border-radius: 8px;
+      height: 9px;
+      overflow: hidden;
+      margin-bottom: 7px;
+    }
+
+    .progress {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #37a1ff, #246dff);
+      transition: width 220ms ease;
+    }
+
+    #status {
+      min-height: 30px;
+      font-size: 12px;
+      color: #223a64;
+      line-height: 1.35;
+      margin-bottom: 8px;
+    }
+
     .hint {
       font-size: 11px;
-      color: #666;
-      margin-top: 6px;
+      color: #55719b;
+      line-height: 1.35;
+      background: #f5f8ff;
+      border: 1px solid #dce7ff;
+      border-radius: 8px;
+      padding: 7px 8px;
+    }
+
+    code {
+      font-family: ui-monospace, 'Consolas', monospace;
+      font-size: 11px;
+      color: #244985;
     }
   </style>
 </head>
 <body>
-  <h1>Translate to Runyankore</h1>
-  <div class="row">
-    <button id="translateBtn">Translate Page</button>
-    <button id="restoreBtn" class="secondary">Restore</button>
-    <button id="copyBtn" class="secondary">Copy Wikitext</button>
+  <div class="card">
+    <div class="head">
+      <h1>Translate to Runyankore</h1>
+      <span class="badge" id="versionBadge">v-</span>
+    </div>
+
+    <div id="statePill" class="state">Idle</div>
+
+    <div class="row">
+      <button id="translateBtn">Translate Page</button>
+      <button id="restoreBtn" class="secondary">Restore</button>
+      <button id="copyBtn" class="secondary">Copy Wikitext</button>
+    </div>
+
+    <div class="metrics">
+      <div class="metric"><span class="k">Progress</span><span class="v" id="progressValue">0%</span></div>
+      <div class="metric"><span class="k">Elapsed</span><span class="v" id="elapsedValue">00:00</span></div>
+      <div class="metric"><span class="k">Proxy</span><span class="v" id="proxyValue">Cloud</span></div>
+    </div>
+
+    <div class="progress-wrap"><div id="progressBar" class="progress"></div></div>
+
+    <div id="status"></div>
+
+    <div class="hint">Works on Wikipedia articles. Uses proxy at <code>https://wiki.soothingspotspa.care</code>.</div>
   </div>
-  <div id="status"></div>
-  <div class="hint">Works on Wikipedia articles. Uses proxy at <code>https://wiki.soothingspotspa.care</code>.</div>
   <script src="popup.js"></script>
 </body>
 </html>
