@@ -32,9 +32,9 @@ SUNBIRD_BASE_URL=https://api.sunbird.ai
 SUNBIRD_TOKEN=your-token
 SUNBIRD_TRANSLATE_ENDPOINTS=/tasks/translate
 PORT=8787
-TRANSLATE_CONCURRENCY=6
+TRANSLATE_CONCURRENCY=3
 SUNBIRD_REQUEST_TIMEOUT_MS=20000
-SUNBIRD_RETRY_COUNT=1
+SUNBIRD_RETRY_COUNT=2
 ```
 
 2. Build and run:
@@ -70,4 +70,30 @@ docker compose down
 4. Click **Restore** to revert page changes.
 5. Click **Copy Wikitext** to copy translated source.
 
+
+
+## Seeding vs Store Release
+
+If you use the extension to seed Incubator templates/modules/pages, use the mode-switch scripts so local-seed helper tooling is excluded from the store package while core translate/copy/build features stay available.
+
+Quick commands:
+
+```powershell
+# enable seeding mode
+powershell -ExecutionPolicy Bypass -File .\scripts\enable-seeding-mode.ps1
+
+# switch to store-safe mode
+powershell -ExecutionPolicy Bypass -File .\scripts\disable-seeding-mode.ps1
+
+# run hard scrub check before packaging
+powershell -ExecutionPolicy Bypass -File .\scripts\prestore-check.ps1
+
+# build store zip (forces store mode + scrub check + package)
+powershell -ExecutionPolicy Bypass -File .\scripts\package-store.ps1
+
+# build store zip + sha256
+powershell -ExecutionPolicy Bypass -File .\scripts\package-store-and-hash.ps1
+```
+
+Detailed guide: `release/SEEDING_STORE_WORKFLOW.md`
 

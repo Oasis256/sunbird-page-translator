@@ -16,11 +16,11 @@ const endpoints = (process.env.SUNBIRD_TRANSLATE_ENDPOINTS || '/tasks/translate'
   .filter(Boolean);
 const port = Number(process.env.PORT || 8787);
 
-const translateConcurrency = Math.max(1, Number(process.env.TRANSLATE_CONCURRENCY || 8));
+const translateConcurrency = Math.max(1, Number(process.env.TRANSLATE_CONCURRENCY || 3));
 const requestTimeoutMs = Math.max(1000, Number(process.env.SUNBIRD_REQUEST_TIMEOUT_MS || 20000));
-const retryCount = Math.max(0, Number(process.env.SUNBIRD_RETRY_COUNT || 1));
+const retryCount = Math.max(0, Number(process.env.SUNBIRD_RETRY_COUNT || 2));
 const translationCacheMaxEntries = Math.max(100, Number(process.env.TRANSLATION_CACHE_MAX_ENTRIES || 5000));
-const maxRequestsPerMinute = Math.max(1, Number(process.env.SUNBIRD_MAX_REQUESTS_PER_MINUTE || 45));
+const maxRequestsPerMinute = Math.max(1, Number(process.env.SUNBIRD_MAX_REQUESTS_PER_MINUTE || 20));
 const logLevel = (process.env.LOG_LEVEL || 'info').toLowerCase();
 const debugTranslation = ['1', 'true', 'yes', 'on'].includes(String(process.env.DEBUG_TRANSLATION || '').toLowerCase());
 const translationCache = new Map();
@@ -196,11 +196,13 @@ async function callSingleEndpoint({ source_language, target_language, text, endp
       const body = await res.json().catch(() => ({}));
 
       if (!res.ok) {
+        const retryAfterMs = res.status === 429 ? parseRetryAfterMs(res.headers.get('retry-after')) : 0;
         const err = decorateError(new Error(body?.error || `Sunbird ${res.status} @ ${endpoint}`), {
           type: 'http',
           status: res.status,
           endpoint,
           attempt,
+          retryAfterMs,
           responseBody: body,
         });
 
